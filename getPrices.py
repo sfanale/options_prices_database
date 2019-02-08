@@ -3,7 +3,7 @@ import json
 import time
 import psycopg2
 import pandas as pd
-
+import numpy as np
 # define global variables
 global nyse
 global nas
@@ -17,7 +17,7 @@ amx = pd.read_csv('AMX.csv')
 all_db = pd.merge(nas, nyse, how="outer")
 all_db = pd.merge(all_db, amx, how='outer')
 all_db_set = set(all_db['Symbol'])
-extra_tickers = ['ACE', 'AET', 'GAS', 'BCR', 'BXLT', 'BRCM', 'CA', 'CVC', 'CAM', 'CBG', 'CCE', 'CSC', 'DPS', 'DD', 'EMC', 'ESRX', 'GGP', 'HAR', 'HCN', 'HSP', 'HCBK', 'JOY', 'GMCR', 'KRFT', 'LVLT', 'LUK', 'LLTC', 'KORS', 'POM', 'PCL', 'PX', 'PCP', 'PCLN', 'COL', 'RLD', 'SNDK', 'SCG', 'SNI', 'STJ', 'SPLS', 'HOT', 'TE', 'TWC', 'TYC', 'XL', 'IVV', 'IJR', 'IYE', 'IYF', 'IYJ', 'IYK', 'IYM', 'IYZ', 'IYW']
+extra_tickers = ['ACE', 'AET', 'GAS', 'BCR', 'BXLT', 'BRCM', 'CA', 'CVC', 'CAM', 'CBG', 'CCE', 'CSC', 'DPS', 'DD', 'EMC', 'ESRX', 'GGP', 'HAR', 'HCN', 'HSP', 'HCBK', 'JOY', 'GMCR', 'KRFT', 'LVLT', 'LUK', 'LLTC', 'KORS', 'POM', 'PCL', 'PX', 'PCP', 'PCLN', 'COL', 'RLD', 'SNDK', 'SCG', 'SNI', 'STJ', 'SPLS', 'HOT', 'TE', 'TWC', 'TYC', 'XL', 'SPX', 'IVV', 'IJR', 'IYE', 'IYF', 'IYJ', 'IYK', 'IYM', 'IYZ', 'IYW']
 
 # combine into one set for looping
 all_tickers = set(nyse['Symbol'])
@@ -26,23 +26,29 @@ all_tickers = all_tickers.union(set(amx['Symbol']))
 all_tickers = all_tickers.union(set(extra_tickers))
 
 
-
+list_temp = ['IJR']
 
 def addToTable(cur, result, price_date, stock, option_type=""):
+    info = {'ask': None, 'bid': None, 'change': None, 'contractsize': None, 'contractsymbol': None,
+          'currency': None, 'expiration': None, 'impliedvolatility': None, 'inthemoney': None, 'lastprice': None,
+            'lasttradedate': None, 'openinterest': None, 'percentchange': None, 'strike': None, 'volume': None }
+
+    info.update(result)
     if stock in all_db_set:
         priceDict = result
         priceDict["priceDate"] = price_date
         priceDict["underlyingSymbol"] = stock
         priceDict["type"] = option_type
         priceDict["currency"] = "USD"
-        priceDict["industry"] = all_db[all_db['Symbol']==stock]['industry'].values[0]
-        priceDict["sector"] = all_db[all_db['Symbol']==stock]['Sector'].values[0]
+        priceDict["industry"] = ''.join(str(all_db[all_db['Symbol']==stock]['industry'].values[0]).split())
+        priceDict["sector"] = ''.join(str(all_db[all_db['Symbol']==stock]['Sector'].values[0]).split())
+
 
         cur.execute("""INSERT INTO prices (pricedate, underlyingsymbol, ask, bid, change, contractsize, contractsymbol,
           currency, expiration, impliedvolatility, inthemoney, lastprice, lasttradedate, openinterest, percentchange,
           strike, volume, optiontype, industry, sector) VALUES (%(priceDate)s, %(underlyingSymbol)s, %(ask)s, %(bid)s, %(change)s, %(contractSize)s,
           %(contractSymbol)s, %(currency)s, %(expiration)s, %(impliedVolatility)s, %(inTheMoney)s, %(lastPrice)s,
-          %(lastTradeDate)s, %(openInterest)s, %(percentChange)s, %(strike)s, %(volume)s, %(type)s), %(industry)s, %(sector)s;""", priceDict)
+          %(lastTradeDate)s, %(openInterest)s, %(percentChange)s, %(strike)s, %(volume)s, %(type)s, %(industry)s, %(sector)s);""", priceDict)
     else:
         priceDict = result
         priceDict["priceDate"] = price_date
@@ -50,9 +56,10 @@ def addToTable(cur, result, price_date, stock, option_type=""):
         priceDict["type"] = option_type
         priceDict["currency"] = "USD"
 
+
         cur.execute("""INSERT INTO prices (pricedate, underlyingsymbol, ask, bid, change, contractsize, contractsymbol,
                   currency, expiration, impliedvolatility, inthemoney, lastprice, lasttradedate, openinterest, percentchange,
-                  strike, volume, optiontype, industry, sector) VALUES (%(priceDate)s, %(underlyingSymbol)s, %(ask)s, %(bid)s, %(change)s, %(contractSize)s,
+                  strike, volume, optiontype) VALUES (%(priceDate)s, %(underlyingSymbol)s, %(ask)s, %(bid)s, %(change)s, %(contractSize)s,
                   %(contractSymbol)s, %(currency)s, %(expiration)s, %(impliedVolatility)s, %(inTheMoney)s, %(lastPrice)s,
                   %(lastTradeDate)s, %(openInterest)s, %(percentChange)s, %(strike)s, %(volume)s, %(type)s);""",
                     priceDict)
@@ -161,8 +168,9 @@ today = str(int(time.time()))
 conn = psycopg2.connect(host="options-prices.cetjnpk7rvcs.us-east-1.rds.amazonaws.com", database="options_prices", user="Stephen", password="password69")
 cur = conn.cursor()
 
-for stock in all_tickers:
+for i,stock in enumerate(all_tickers):
     print(stock)
+    print(i/len(all_tickers)*100)
     try:
         result = requests.get(url+stock+'?')
         result = result.json()
@@ -187,5 +195,6 @@ for stock in all_tickers:
 
 conn.commit()
 print(failed)
+print(len(failed))
 cur.close()
 conn.close()
