@@ -83,10 +83,15 @@ def add_to_quote_table(cur, res, price_date):
         "regularMarketPrice": None, "regularMarketTime": None, "regularMarketVolume": None, "sharesOutstanding": None,
         "shortName": None, "sourceInterval": None, "symbol": None, "tradeable": None, "trailingAnnualDividendRate": None,
         "trailingAnnualDividendYield": None, "trailingPE": None, "twoHundredDayAverage": None,
-        "twoHundredDayAverageChange": None, "twoHundredDayAverageChangePercent": None}
+        "twoHundredDayAverageChange": None, "twoHundredDayAverageChangePercent": None, "sector": None, "industry":None}
 
     info.update(res)
     info["pricedate"] = price_date
+
+    if stock in all_db_set:
+        info["industry"] = ''.join(str(all_db[all_db['Symbol'] == stock]['industry'].values[0]).split())
+        info["sector"] = ''.join(str(all_db[all_db['Symbol'] == stock]['Sector'].values[0]).split())
+
     cur.execute("""INSERT INTO qoutes (ask, asksize, averagedailyvolume10day, averagedailyvolume3month, bid,
       bidsize, bookvalue, currency, dividenddate, earningstimestamp, earningstimestampend, 
       earningstimestampstart, epsforward, epstrailing12months, esgpopulated, exchange, exchangedatadelayedby,
@@ -100,7 +105,7 @@ def add_to_quote_table(cur, res, price_date):
       regularmarketdayrange, regularmarketopen, regularmarketpreviousclose, regularmarketprice, 
       regularmarkettime, regularmarketvolume, sharesoutstanding, shortname, sourceinterval, symbol, 
       tradeable, trailingannualdividendrate, trailingannualdividendyield, trailingpe, twohundreddayaverage, 
-      twohundreddayaveragechange, twohundreddayaveragechangepercent, pricedate) VALUES (%(ask)s, %(askSize)s, 
+      twohundreddayaveragechange, twohundreddayaveragechangepercent, pricedate, sector, industry) VALUES (%(ask)s, %(askSize)s, 
       %(averageDailyVolume10Day)s, %(averageDailyVolume3Month)s, %(bid)s, %(bidSize)s, %(bookValue)s, %(currency)s,
       %(dividendDate)s, %(earningsTimestamp)s, %(earningsTimestampEnd)s, %(earningsTimestampStart)s, %(epsForward)s, 
       %(epsTrailingTwelveMonths)s, %(esgPopulated)s, %(exchange)s, %(exchangeDataDelayedBy)s, %(exchangeTimezoneName)s,
@@ -114,7 +119,7 @@ def add_to_quote_table(cur, res, price_date):
       %(regularMarketOpen)s, %(regularMarketPreviousClose)s, %(regularMarketPrice)s, %(regularMarketTime)s, 
       %(regularMarketVolume)s, %(sharesOutstanding)s, %(shortName)s, %(sourceInterval)s, %(symbol)s, %(tradeable)s, 
       %(trailingAnnualDividendRate)s, %(trailingAnnualDividendYield)s, %(trailingPE)s, %(twoHundredDayAverage)s, 
-      %(twoHundredDayAverageChange)s, %(twoHundredDayAverageChangePercent)s, %(pricedate)s);""", info)
+      %(twoHundredDayAverageChange)s, %(twoHundredDayAverageChangePercent)s, %(pricedate)s, %(sector)s, %(industry)s);""", info)
 
 SP500 = ['DB', 'AAPL', 'ABT', 'ABBV', 'ACN', 'ACE', 'ADBE', 'ADT', 'AAP', 'AES', 'AET', 'AFL',
              'AMG', 'A', 'GAS', 'ARE', 'APD', 'AKAM', 'AA', 'AGN', 'ALXN', 'ALLE', 'ADS', 'ALL', 'ALTR', 'MO', 'AMZN',
