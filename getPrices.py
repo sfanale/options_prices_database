@@ -3,7 +3,9 @@ import json
 import time
 import psycopg2
 import pandas as pd
-import numpy as np
+import threading
+from queue import Queue
+
 # define global variables
 global nyse
 global nas
@@ -28,98 +30,183 @@ all_tickers = all_tickers.union(set(extra_tickers))
 
 list_temp = ['IJR']
 
-def addToTable(cur, result, price_date, stock, option_type=""):
-    info = {'ask': None, 'bid': None, 'change': None, 'contractsize': None, 'contractsymbol': None,
-          'currency': None, 'expiration': None, 'impliedvolatility': None, 'inthemoney': None, 'lastprice': None,
-            'lasttradedate': None, 'openinterest': None, 'percentchange': None, 'strike': None, 'volume': None }
 
-    info.update(result)
-    if stock in all_db_set:
-        priceDict = result
-        priceDict["priceDate"] = price_date
-        priceDict["underlyingSymbol"] = stock
-        priceDict["type"] = option_type
-        priceDict["currency"] = "USD"
-        priceDict["industry"] = ''.join(str(all_db[all_db['Symbol']==stock]['industry'].values[0]).split())
-        priceDict["sector"] = ''.join(str(all_db[all_db['Symbol']==stock]['Sector'].values[0]).split())
+def coroutine(func):
+    def start(*args, **kwargs):
+        cr = func(*args, **kwargs)
+        next(cr)
+        return cr
+    return start
 
 
-        cur.execute("""INSERT INTO prices (pricedate, underlyingsymbol, ask, bid, change, contractsize, contractsymbol,
-          currency, expiration, impliedvolatility, inthemoney, lastprice, lasttradedate, openinterest, percentchange,
-          strike, volume, optiontype, industry, sector) VALUES (%(priceDate)s, %(underlyingSymbol)s, %(ask)s, %(bid)s, %(change)s, %(contractSize)s,
-          %(contractSymbol)s, %(currency)s, %(expiration)s, %(impliedVolatility)s, %(inTheMoney)s, %(lastPrice)s,
-          %(lastTradeDate)s, %(openInterest)s, %(percentChange)s, %(strike)s, %(volume)s, %(type)s, %(industry)s, %(sector)s);""", priceDict)
-    else:
-        priceDict = result
-        priceDict["priceDate"] = price_date
-        priceDict["underlyingSymbol"] = stock
-        priceDict["type"] = option_type
-        priceDict["currency"] = "USD"
+@coroutine
+def addToTable(price_date, option_type=""):
+    queue = Queue()
+    conn = psycopg2.connect(host="options-prices.cetjnpk7rvcs.us-east-1.rds.amazonaws.com", database="options_prices",
+                            user="Stephen", password="password69")
+    cur = conn.cursor()
+
+    def add_data():
+        print('Threading started')
+        while True:
+            item = queue.get()
+            if item is GeneratorExit:
+                conn.commit()
+                cur.close()
+                conn.close()
+                return
+            if item is None:
+                continue
+            else:
+                info = {'ask': None, 'bid': None, 'change': None, 'contractsize': None, 'contractsymbol': None,
+                        'currency': None, 'expiration': None, 'impliedvolatility': None, 'inthemoney': None,
+                        'lastprice': None,
+                        'lasttradedate': None, 'openinterest': None, 'percentchange': None, 'strike': None,
+                        'volume': None}
+                result = item[0]
+                stock = item[1]
+                info.update(result)
+                if stock in all_db_set:
+                    info["priceDate"] = price_date
+                    info["underlyingSymbol"] = stock
+                    info["type"] = option_type
+                    info["currency"] = "USD"
+                    info["industry"] = ''.join(
+                        str(all_db[all_db['Symbol'] == stock]['industry'].values[0]).split())
+                    info["sector"] = ''.join(str(all_db[all_db['Symbol'] == stock]['Sector'].values[0]).split())
+
+                    cur.execute("""INSERT INTO prices (pricedate, underlyingsymbol, ask, bid, change, contractsize, contractsymbol,
+                             currency, expiration, impliedvolatility, inthemoney, lastprice, lasttradedate, openinterest, percentchange,
+                             strike, volume, optiontype, industry, sector) VALUES (%(priceDate)s, %(underlyingSymbol)s, %(ask)s, %(bid)s, %(change)s, %(contractSize)s,
+                             %(contractSymbol)s, %(currency)s, %(expiration)s, %(impliedVolatility)s, %(inTheMoney)s, %(lastPrice)s,
+                             %(lastTradeDate)s, %(openInterest)s, %(percentChange)s, %(strike)s, %(volume)s, %(type)s, %(industry)s, %(sector)s);""",
+                                info)
+                else:
+                    info = info
+                    info["priceDate"] = price_date
+                    info["underlyingSymbol"] = stock
+                    info["type"] = option_type
+                    info["currency"] = "USD"
+
+                    cur.execute("""INSERT INTO prices (pricedate, underlyingsymbol, ask, bid, change, contractsize, contractsymbol,
+                                     currency, expiration, impliedvolatility, inthemoney, lastprice, lasttradedate, openinterest, percentchange,
+                                     strike, volume, optiontype) VALUES (%(priceDate)s, %(underlyingSymbol)s, %(ask)s, %(bid)s, %(change)s, %(contractSize)s,
+                                     %(contractSymbol)s, %(currency)s, %(expiration)s, %(impliedVolatility)s, %(inTheMoney)s, %(lastPrice)s,
+                                     %(lastTradeDate)s, %(openInterest)s, %(percentChange)s, %(strike)s, %(volume)s, %(type)s);""",
+                                info)
+                print("finished adding option %s" % stock)
+    threading.Thread(target=add_data).start()
+    try:
+        while True:
+            result, stock = (yield)
+            queue.put([result, stock])
+    except GeneratorExit:
+        queue.put(GeneratorExit)
 
 
-        cur.execute("""INSERT INTO prices (pricedate, underlyingsymbol, ask, bid, change, contractsize, contractsymbol,
-                  currency, expiration, impliedvolatility, inthemoney, lastprice, lasttradedate, openinterest, percentchange,
-                  strike, volume, optiontype) VALUES (%(priceDate)s, %(underlyingSymbol)s, %(ask)s, %(bid)s, %(change)s, %(contractSize)s,
-                  %(contractSymbol)s, %(currency)s, %(expiration)s, %(impliedVolatility)s, %(inTheMoney)s, %(lastPrice)s,
-                  %(lastTradeDate)s, %(openInterest)s, %(percentChange)s, %(strike)s, %(volume)s, %(type)s);""",
-                    priceDict)
 
 
-def add_to_quote_table(cur, res, price_date):
-    info = {"ask": None, "askSize": None, "averageDailyVolume10Day": None, "averageDailyVolume3Month": None, "bid": None,
-        "bidSize": None,"bookValue": None, "currency": None, "dividendDate": None,"earningsTimestamp": None,
-        "earningsTimestampEnd": None, "earningsTimestampStart": None,"epsForward": None, "epsTrailingTwelveMonths": None,
-        "esgPopulated": None,"exchange": None, "exchangeDataDelayedBy": None, "exchangeTimezoneName": None,
-        "exchangeTimezoneShortName": None, "fiftyDayAverage": None, "fiftyDayAverageChange": None,
-        "fiftyDayAverageChangePercent": None, "fiftyTwoWeekHigh": None, "fiftyTwoWeekHighChange": None,
-        "fiftyTwoWeekHighChangePercent": None, "fiftyTwoWeekLow": None, "fiftyTwoWeekLowChange": None,
-        "fiftyTwoWeekLowChangePercent": None, "fiftyTwoWeekRange": None, "financialCurrency": None, "forwardPE": None,
-        "fullExchangeName": None, "gmtOffSetMilliseconds": None, "language": None, "longName": None, "market": None,
-        "marketCap": None, "marketState": None, "messageBoardId": None, "postMarketChange": None,
-        "postMarketChangePercent": None, "postMarketPrice": None, "postMarketTime": None, "priceHint": None,
-        "priceToBook": None, "quoteSourceName": None, "quoteType": None, "region": None, "regularMarketChange": None,
-        "regularMarketChangePercent": None, "regularMarketDayHigh": None, "regularMarketDayLow": None ,
-        "regularMarketDayRange": None, "regularMarketOpen": None, "regularMarketPreviousClose": None,
-        "regularMarketPrice": None, "regularMarketTime": None, "regularMarketVolume": None, "sharesOutstanding": None,
-        "shortName": None, "sourceInterval": None, "symbol": None, "tradeable": None, "trailingAnnualDividendRate": None,
-        "trailingAnnualDividendYield": None, "trailingPE": None, "twoHundredDayAverage": None,
-        "twoHundredDayAverageChange": None, "twoHundredDayAverageChangePercent": None, "sector": None, "industry":None}
 
-    info.update(res)
-    info["pricedate"] = price_date
+@coroutine
+def add_to_quote_table(price_date):
+    conn = psycopg2.connect(host="options-prices.cetjnpk7rvcs.us-east-1.rds.amazonaws.com", database="options_prices",
+                            user="Stephen", password="password69")
+    cur = conn.cursor()
+    queue = Queue()
 
-    if stock in all_db_set:
-        info["industry"] = ''.join(str(all_db[all_db['Symbol'] == stock]['industry'].values[0]).split())
-        info["sector"] = ''.join(str(all_db[all_db['Symbol'] == stock]['Sector'].values[0]).split())
+    def add_data():
+        print('Threading started')
+        while True:
+            item = queue.get()
+            if item is GeneratorExit:
+                conn.commit()
+                cur.close()
+                conn.close()
+                return
+            if item is None:
+                continue
+            else:
+                info = {"ask": None, "askSize": None, "averageDailyVolume10Day": None, "averageDailyVolume3Month": None,
+                        "bid": None,
+                        "bidSize": None, "bookValue": None, "currency": None, "dividendDate": None,
+                        "earningsTimestamp": None,
+                        "earningsTimestampEnd": None, "earningsTimestampStart": None, "epsForward": None,
+                        "epsTrailingTwelveMonths": None,
+                        "esgPopulated": None, "exchange": None, "exchangeDataDelayedBy": None,
+                        "exchangeTimezoneName": None,
+                        "exchangeTimezoneShortName": None, "fiftyDayAverage": None, "fiftyDayAverageChange": None,
+                        "fiftyDayAverageChangePercent": None, "fiftyTwoWeekHigh": None, "fiftyTwoWeekHighChange": None,
+                        "fiftyTwoWeekHighChangePercent": None, "fiftyTwoWeekLow": None, "fiftyTwoWeekLowChange": None,
+                        "fiftyTwoWeekLowChangePercent": None, "fiftyTwoWeekRange": None, "financialCurrency": None,
+                        "forwardPE": None,
+                        "fullExchangeName": None, "gmtOffSetMilliseconds": None, "language": None, "longName": None,
+                        "market": None,
+                        "marketCap": None, "marketState": None, "messageBoardId": None, "postMarketChange": None,
+                        "postMarketChangePercent": None, "postMarketPrice": None, "postMarketTime": None,
+                        "priceHint": None,
+                        "priceToBook": None, "quoteSourceName": None, "quoteType": None, "region": None,
+                        "regularMarketChange": None,
+                        "regularMarketChangePercent": None, "regularMarketDayHigh": None, "regularMarketDayLow": None,
+                        "regularMarketDayRange": None, "regularMarketOpen": None, "regularMarketPreviousClose": None,
+                        "regularMarketPrice": None, "regularMarketTime": None, "regularMarketVolume": None,
+                        "sharesOutstanding": None,
+                        "shortName": None, "sourceInterval": None, "symbol": None, "tradeable": None,
+                        "trailingAnnualDividendRate": None,
+                        "trailingAnnualDividendYield": None, "trailingPE": None, "twoHundredDayAverage": None,
+                        "twoHundredDayAverageChange": None, "twoHundredDayAverageChangePercent": None, "sector": None,
+                        "industry": None}
+                res = item[0]
+                stock = item[1]
 
-    cur.execute("""INSERT INTO qoutes (ask, asksize, averagedailyvolume10day, averagedailyvolume3month, bid,
-      bidsize, bookvalue, currency, dividenddate, earningstimestamp, earningstimestampend, 
-      earningstimestampstart, epsforward, epstrailing12months, esgpopulated, exchange, exchangedatadelayedby,
-      exchangetimezonename, exchangetimezoneshortname, fiftydayaverage, fiftydayaveragechange, 
-      fiftydayaveragechangepercent, fiftytwoweekhigh, fiftytwoweekhighchange, fiftytwoweekhighchangepercent,
-      fiftytwoweeklow, fiftytwoweeklowchange, fiftytwoweeklowchangepercent, fiftytwoweekrange, 
-      financialcurrency, forwardpe, fullexchangename, gmtoffsetmilliseconds, language, longname, 
-      market, marketcap, marketstate, messageboardid, postmarketchange, postmarketchangepercent, 
-      postmarketprice, postmarkettime, pricehint, pricetobook, quotesourcename, quotetype, region,
-      regularmarketchange, regularmarketchangepercent, regularmarketdayhigh, regularmarketdaylow, 
-      regularmarketdayrange, regularmarketopen, regularmarketpreviousclose, regularmarketprice, 
-      regularmarkettime, regularmarketvolume, sharesoutstanding, shortname, sourceinterval, symbol, 
-      tradeable, trailingannualdividendrate, trailingannualdividendyield, trailingpe, twohundreddayaverage, 
-      twohundreddayaveragechange, twohundreddayaveragechangepercent, pricedate, sector, industry) VALUES (%(ask)s, %(askSize)s, 
-      %(averageDailyVolume10Day)s, %(averageDailyVolume3Month)s, %(bid)s, %(bidSize)s, %(bookValue)s, %(currency)s,
-      %(dividendDate)s, %(earningsTimestamp)s, %(earningsTimestampEnd)s, %(earningsTimestampStart)s, %(epsForward)s, 
-      %(epsTrailingTwelveMonths)s, %(esgPopulated)s, %(exchange)s, %(exchangeDataDelayedBy)s, %(exchangeTimezoneName)s,
-      %(exchangeTimezoneShortName)s, %(fiftyDayAverage)s, %(fiftyDayAverageChange)s, %(fiftyDayAverageChangePercent)s, 
-      %(fiftyTwoWeekHigh)s, %(fiftyTwoWeekHighChange)s, %(fiftyTwoWeekHighChangePercent)s, %(fiftyTwoWeekLow)s, 
-      %(fiftyTwoWeekLowChange)s, %(fiftyTwoWeekLowChangePercent)s, %(fiftyTwoWeekRange)s, %(financialCurrency)s, 
-      %(forwardPE)s, %(fullExchangeName)s, %(gmtOffSetMilliseconds)s, %(language)s, %(longName)s, %(market)s, %(marketCap)s, 
-      %(marketState)s, %(messageBoardId)s, %(postMarketChange)s, %(postMarketChangePercent)s, %(postMarketPrice)s, 
-      %(postMarketTime)s, %(priceHint)s, %(priceToBook)s, %(quoteSourceName)s, %(quoteType)s, %(region)s, %(regularMarketChange)s, 
-      %(regularMarketChangePercent)s, %(regularMarketDayHigh)s, %(regularMarketDayLow)s, %(regularMarketDayRange)s, 
-      %(regularMarketOpen)s, %(regularMarketPreviousClose)s, %(regularMarketPrice)s, %(regularMarketTime)s, 
-      %(regularMarketVolume)s, %(sharesOutstanding)s, %(shortName)s, %(sourceInterval)s, %(symbol)s, %(tradeable)s, 
-      %(trailingAnnualDividendRate)s, %(trailingAnnualDividendYield)s, %(trailingPE)s, %(twoHundredDayAverage)s, 
-      %(twoHundredDayAverageChange)s, %(twoHundredDayAverageChangePercent)s, %(pricedate)s, %(sector)s, %(industry)s);""", info)
+                info.update(res)
+                info["pricedate"] = price_date
+
+                if stock in all_db_set:
+                    info["industry"] = ''.join(str(all_db[all_db['Symbol'] == stock]['industry'].values[0]).split())
+                    info["sector"] = ''.join(str(all_db[all_db['Symbol'] == stock]['Sector'].values[0]).split())
+
+                cur.execute("""INSERT INTO qoutes (ask, asksize, averagedailyvolume10day, averagedailyvolume3month, bid,
+                         bidsize, bookvalue, currency, dividenddate, earningstimestamp, earningstimestampend, 
+                         earningstimestampstart, epsforward, epstrailing12months, esgpopulated, exchange, exchangedatadelayedby,
+                         exchangetimezonename, exchangetimezoneshortname, fiftydayaverage, fiftydayaveragechange, 
+                         fiftydayaveragechangepercent, fiftytwoweekhigh, fiftytwoweekhighchange, fiftytwoweekhighchangepercent,
+                         fiftytwoweeklow, fiftytwoweeklowchange, fiftytwoweeklowchangepercent, fiftytwoweekrange, 
+                         financialcurrency, forwardpe, fullexchangename, gmtoffsetmilliseconds, language, longname, 
+                         market, marketcap, marketstate, messageboardid, postmarketchange, postmarketchangepercent, 
+                         postmarketprice, postmarkettime, pricehint, pricetobook, quotesourcename, quotetype, region,
+                         regularmarketchange, regularmarketchangepercent, regularmarketdayhigh, regularmarketdaylow, 
+                         regularmarketdayrange, regularmarketopen, regularmarketpreviousclose, regularmarketprice, 
+                         regularmarkettime, regularmarketvolume, sharesoutstanding, shortname, sourceinterval, symbol, 
+                         tradeable, trailingannualdividendrate, trailingannualdividendyield, trailingpe, twohundreddayaverage, 
+                         twohundreddayaveragechange, twohundreddayaveragechangepercent, pricedate, sector, industry) VALUES (%(ask)s, %(askSize)s, 
+                         %(averageDailyVolume10Day)s, %(averageDailyVolume3Month)s, %(bid)s, %(bidSize)s, %(bookValue)s, %(currency)s,
+                         %(dividendDate)s, %(earningsTimestamp)s, %(earningsTimestampEnd)s, %(earningsTimestampStart)s, %(epsForward)s, 
+                         %(epsTrailingTwelveMonths)s, %(esgPopulated)s, %(exchange)s, %(exchangeDataDelayedBy)s, %(exchangeTimezoneName)s,
+                         %(exchangeTimezoneShortName)s, %(fiftyDayAverage)s, %(fiftyDayAverageChange)s, %(fiftyDayAverageChangePercent)s, 
+                         %(fiftyTwoWeekHigh)s, %(fiftyTwoWeekHighChange)s, %(fiftyTwoWeekHighChangePercent)s, %(fiftyTwoWeekLow)s, 
+                         %(fiftyTwoWeekLowChange)s, %(fiftyTwoWeekLowChangePercent)s, %(fiftyTwoWeekRange)s, %(financialCurrency)s, 
+                         %(forwardPE)s, %(fullExchangeName)s, %(gmtOffSetMilliseconds)s, %(language)s, %(longName)s, %(market)s, %(marketCap)s, 
+                         %(marketState)s, %(messageBoardId)s, %(postMarketChange)s, %(postMarketChangePercent)s, %(postMarketPrice)s, 
+                         %(postMarketTime)s, %(priceHint)s, %(priceToBook)s, %(quoteSourceName)s, %(quoteType)s, %(region)s, %(regularMarketChange)s, 
+                         %(regularMarketChangePercent)s, %(regularMarketDayHigh)s, %(regularMarketDayLow)s, %(regularMarketDayRange)s, 
+                         %(regularMarketOpen)s, %(regularMarketPreviousClose)s, %(regularMarketPrice)s, %(regularMarketTime)s, 
+                         %(regularMarketVolume)s, %(sharesOutstanding)s, %(shortName)s, %(sourceInterval)s, %(symbol)s, %(tradeable)s, 
+                         %(trailingAnnualDividendRate)s, %(trailingAnnualDividendYield)s, %(trailingPE)s, %(twoHundredDayAverage)s, 
+                         %(twoHundredDayAverageChange)s, %(twoHundredDayAverageChangePercent)s, %(pricedate)s, %(sector)s, %(industry)s);""",
+                            info)
+                print("finished adding stock %s" % stock)
+
+    threading.Thread(target=add_data).start()
+    try:
+        while True:
+            result, stock = (yield)
+            queue.put([result, stock])
+    except GeneratorExit:
+        queue.put(GeneratorExit)
+
+
+
+
 
 SP500 = ['DB', 'AAPL', 'ABT', 'ABBV', 'ACN', 'ACE', 'ADBE', 'ADT', 'AAP', 'AES', 'AET', 'AFL',
              'AMG', 'A', 'GAS', 'ARE', 'APD', 'AKAM', 'AA', 'AGN', 'ALXN', 'ALLE', 'ADS', 'ALL', 'ALTR', 'MO', 'AMZN',
@@ -170,24 +257,31 @@ failed = []
 url = 'https://query1.finance.yahoo.com/v7/finance/options/'
 today = str(int(time.time()))
 # i added db to the sp500 just because i want the data
-conn = psycopg2.connect(host="options-prices.cetjnpk7rvcs.us-east-1.rds.amazonaws.com", database="options_prices", user="Stephen", password="password69")
-cur = conn.cursor()
 
-for i,stock in enumerate(all_tickers):
+
+stock_Q = Queue()
+put_Q = Queue()
+call_Q = Queue()
+add_stock = add_to_quote_table(today)
+add_call = addToTable(today, option_type="call")
+add_put = addToTable(today, option_type="put")
+
+
+for i, stock in enumerate(all_tickers):
     print(stock)
     print(i/len(all_tickers)*100)
     try:
         result = requests.get(url+stock+'?')
         result = result.json()
         dates = result['optionChain']['result'][0]['expirationDates']
-        add_to_quote_table(cur, result['optionChain']['result'][0]['quote'], today)
+        add_stock.send([result['optionChain']['result'][0]['quote'], stock])
         for d in dates:
             result = requests.get(url + stock + '?&date=' + str(d))
             result = result.json()
             for call in result["optionChain"]["result"][0]["options"][0]["calls"]:
-                addToTable(cur, call, today, stock, option_type="call")
+                add_call.send([call, stock])
             for put in result["optionChain"]["result"][0]["options"][0]["puts"]:
-                addToTable(cur, put, today, stock, option_type="put")
+                add_put.send([put, stock])
     except TypeError:
         failed.append(stock)
         print("Didn't find dates for " + stock)
@@ -198,8 +292,19 @@ for i,stock in enumerate(all_tickers):
         failed.append(stock)
         print('json error')
 
-conn.commit()
+print(call_Q)
+
+while not call_Q.empty():
+    print(call_Q)
+    print(put_Q)
+    time.sleep(30)
+
+
+
+add_stock.close()
+add_call.close()
+add_put.close()
 print(failed)
 print(len(failed))
-cur.close()
-conn.close()
+
+
