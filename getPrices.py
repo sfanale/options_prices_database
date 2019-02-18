@@ -205,6 +205,7 @@ def add_to_quote_table(price_date):
     except GeneratorExit:
         queue.put(GeneratorExit)
 
+
 def test_if_open(url, ticker):
     res = requests.get(url + ticker + '?')
     res = res.json()
@@ -314,5 +315,7 @@ if run_code:
     add_put.close()
     print(failed)
     print(len(failed))
+else:
+    print("market closed today")
 
 
