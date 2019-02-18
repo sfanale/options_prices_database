@@ -1,6 +1,7 @@
 import requests
 import json
 import time
+import datetime
 import psycopg2
 import pandas as pd
 import threading
@@ -204,6 +205,13 @@ def add_to_quote_table(price_date):
     except GeneratorExit:
         queue.put(GeneratorExit)
 
+def test_if_open(url, ticker):
+    res = requests.get(url + ticker + '?')
+    res = res.json()
+    last_trade = res['optionChain']['result'][0]['quote']['regularMarketTime']
+    last_trade_date = datetime.datetime.fromtimestamp(float(last_trade)).date()
+    today = datetime.datetime.fromtimestamp(time.time()).date()
+    return last_trade_date == today
 
 
 
@@ -258,6 +266,8 @@ url = 'https://query1.finance.yahoo.com/v7/finance/options/'
 today = str(int(time.time()))
 # i added db to the sp500 just because i want the data
 
+run_code = test_if_open(url, 'AAPL')
+
 
 stock_Q = Queue()
 put_Q = Queue()
@@ -266,45 +276,43 @@ add_stock = add_to_quote_table(today)
 add_call = addToTable(today, option_type="call")
 add_put = addToTable(today, option_type="put")
 
-
-for i, stock in enumerate(all_tickers):
-    print(stock)
-    print(i/len(all_tickers)*100)
-    try:
-        result = requests.get(url+stock+'?')
-        result = result.json()
-        dates = result['optionChain']['result'][0]['expirationDates']
-        add_stock.send([result['optionChain']['result'][0]['quote'], stock])
-        for d in dates:
-            result = requests.get(url + stock + '?&date=' + str(d))
+if run_code:
+    for i, stock in enumerate(all_tickers):
+        print(stock)
+        print(i/len(all_tickers)*100)
+        try:
+            result = requests.get(url+stock+'?')
             result = result.json()
-            for call in result["optionChain"]["result"][0]["options"][0]["calls"]:
-                add_call.send([call, stock])
-            for put in result["optionChain"]["result"][0]["options"][0]["puts"]:
-                add_put.send([put, stock])
-    except TypeError:
-        failed.append(stock)
-        print("Didn't find dates for " + stock)
-    except IndexError:
-        failed.append(stock)
-        print('index error for '+stock)
-    except json.decoder.JSONDecodeError:
-        failed.append(stock)
-        print('json error')
+            dates = result['optionChain']['result'][0]['expirationDates']
+            add_stock.send([result['optionChain']['result'][0]['quote'], stock])
+            for d in dates:
+                result = requests.get(url + stock + '?&date=' + str(d))
+                result = result.json()
+                for call in result["optionChain"]["result"][0]["options"][0]["calls"]:
+                    add_call.send([call, stock])
+                for put in result["optionChain"]["result"][0]["options"][0]["puts"]:
+                    add_put.send([put, stock])
+        except TypeError:
+            failed.append(stock)
+            print("Didn't find dates for " + stock)
+        except IndexError:
+            failed.append(stock)
+            print('index error for '+stock)
+        except json.decoder.JSONDecodeError:
+            failed.append(stock)
+            print('json error')
 
-print(call_Q)
+    print(call_Q.qsize())
 
-while not call_Q.empty():
-    print(call_Q)
-    print(put_Q)
-    time.sleep(30)
+    while not call_Q.empty():
+        print(call_Q)
+        print(put_Q)
+        time.sleep(30)
 
-
-
-add_stock.close()
-add_call.close()
-add_put.close()
-print(failed)
-print(len(failed))
+    add_stock.close()
+    add_call.close()
+    add_put.close()
+    print(failed)
+    print(len(failed))
 
 
