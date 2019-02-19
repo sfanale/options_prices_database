@@ -46,7 +46,10 @@ def addToTable(option_type=""):
                 cur.close()
                 conn.close()
                 return
-            if item is None:
+            elif item == [0, 0, 0]:
+                conn.commit()
+                print("committed")
+            elif item is None:
                 continue
             else:
                 info = {'ask': None, 'bid': None, 'change': None, 'contractsize': None, 'contractsymbol': None,
@@ -86,7 +89,7 @@ def addToTable(option_type=""):
                                      %(contractSymbol)s, %(currency)s, %(expiration)s, %(impliedVolatility)s, %(inTheMoney)s, %(lastPrice)s,
                                      %(lastTradeDate)s, %(openInterest)s, %(percentChange)s, %(strike)s, %(volume)s, %(type)s);""",
                                 info)
-               # print("finished adding option %s" % stock)
+                print("finished adding option %s" % stock)
     threading.Thread(target=add_data).start()
     try:
         while True:
@@ -112,8 +115,9 @@ def add_to_quote_table():
                 cur.close()
                 conn.close()
                 return
-            elif item is [420, 69, 8008]:
+            elif item == [0, 0, 0]:
                 conn.commit()
+                print("committed")
             elif item is None:
                 continue
             else:
@@ -186,7 +190,7 @@ def add_to_quote_table():
                          %(trailingAnnualDividendRate)s, %(trailingAnnualDividendYield)s, %(trailingPE)s, %(twoHundredDayAverage)s, 
                          %(twoHundredDayAverageChange)s, %(twoHundredDayAverageChangePercent)s, %(pricedate)s, %(sector)s, %(industry)s);""",
                             info)
-                #print("finished adding stock %s" % stock)
+                print("finished adding stock %s" % stock)
 
     threading.Thread(target=add_data).start()
     try:
@@ -236,10 +240,8 @@ while datetime.datetime.now().hour < 16:
                     result = result.json()
                     for call in result["optionChain"]["result"][0]["options"][0]["calls"]:
                         add_call.send([call, stock, str(int(time.time()))])
-                    add_call.send([420, 69, 8008])
                     for put in result["optionChain"]["result"][0]["options"][0]["puts"]:
                         add_put.send([put, stock, str(int(time.time()))])
-                    add_put.send([420, 69, 8008])
             except TypeError:
                 failed.append(stock)
                 print("Didn't find dates for " + stock)
@@ -251,11 +253,14 @@ while datetime.datetime.now().hour < 16:
                 print('json error')
         print('got all data')
         print(datetime.datetime.now().minute)
-        print(call_Q)
+        print(call_Q.qsize())
         while not call_Q.empty():
             print(call_Q)
             print(put_Q)
             time.sleep(30)
+        add_call.send([0,0,0])
+        add_put.send([0,0,0])
+        add_stock.send([0,0,0])
     else:
         print("sleep")
         time.sleep(60)
