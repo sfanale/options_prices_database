@@ -35,7 +35,7 @@ def build_info(input_info, stock, price_date, option_type=""):
             'currency': None, 'expiration': None, 'impliedvolatility': None, 'inthemoney': None,
             'lastprice': None,
             'lasttradedate': None, 'openinterest': None, 'percentchange': None, 'strike': None,
-            'volume': None, "industry": None, "sector": None}
+            'volume': None, "industry": None, "sector": None, "pricetype": "close"}
     info.update(input_info)
 
     info["priceDate"] = price_date
@@ -56,6 +56,7 @@ def test_if_open(url, ticker):
     last_trade_date = datetime.datetime.fromtimestamp(float(last_trade)).date()
     today = datetime.datetime.fromtimestamp(time.time()).date()
     return last_trade_date == today
+
 
 failed = []
 
@@ -82,7 +83,7 @@ stock_template = "(%(ask)s, %(askSize)s, %(averageDailyVolume10Day)s, %(averageD
                  " %(regularMarketVolume)s, %(sharesOutstanding)s, %(shortName)s, %(sourceInterval)s, %(symbol)s, " \
                  "%(tradeable)s, %(trailingAnnualDividendRate)s, %(trailingAnnualDividendYield)s, %(trailingPE)s, " \
                  "%(twoHundredDayAverage)s, %(twoHundredDayAverageChange)s, %(twoHundredDayAverageChangePercent)s, " \
-                 "%(pricedate)s, %(sector)s, %(industry)s)"
+                 "%(pricedate)s, %(sector)s, %(industry)s, %(pricetype)s)"
 
 stock_sql = "INSERT INTO qoutes (ask, asksize, averagedailyvolume10day, averagedailyvolume3month, bid, bidsize, " \
             "bookvalue, currency, dividenddate, earningstimestamp, earningstimestampend, earningstimestampstart, " \
@@ -97,16 +98,16 @@ stock_sql = "INSERT INTO qoutes (ask, asksize, averagedailyvolume10day, averaged
             "regularmarketpreviousclose, regularmarketprice, regularmarkettime, regularmarketvolume, " \
             "sharesoutstanding, shortname, sourceinterval, symbol, tradeable, trailingannualdividendrate, " \
             "trailingannualdividendyield, trailingpe, twohundreddayaverage, twohundreddayaveragechange," \
-            " twohundreddayaveragechangepercent, pricedate, sector, industry) VALUES %s"
+            " twohundreddayaveragechangepercent, pricedate, sector, industry, pricetype) VALUES %s"
 
 option_template = "(%(priceDate)s, %(underlyingSymbol)s, %(ask)s, %(bid)s, %(change)s, %(contractSize)s," \
                   "%(contractSymbol)s, %(currency)s, %(expiration)s, %(impliedVolatility)s, %(inTheMoney)s, " \
                   "%(lastPrice)s,%(lastTradeDate)s, %(openInterest)s, %(percentChange)s, %(strike)s, %(volume)s," \
-                  " %(type)s, %(industry)s, %(sector)s)"
+                  " %(type)s, %(industry)s, %(sector)s, %(pricetype)s)"
 
 option_sql = "INSERT INTO prices (pricedate, underlyingsymbol, ask, bid, change, contractsize, contractsymbol," \
              "currency, expiration, impliedvolatility, inthemoney, lastprice, lasttradedate, openinterest," \
-             " percentchange,strike, volume, optiontype, industry, sector) VALUES %s"
+             " percentchange,strike, volume, optiontype, industry, sector, pricetype) VALUES %s"
 
 
 
@@ -154,7 +155,7 @@ if run_code:
                     "trailingAnnualDividendRate": None,
                     "trailingAnnualDividendYield": None, "trailingPE": None, "twoHundredDayAverage": None,
                     "twoHundredDayAverageChange": None, "twoHundredDayAverageChangePercent": None, "sector": None,
-                    "industry": None}
+                    "industry": None, "pricetype": 'close'}
             info.update(res)
             if stock in all_db_set:
                 info["industry"] = ''.join(str(all_db[all_db['Symbol'] == stock]['industry'].values[0]).split())
@@ -191,5 +192,6 @@ if run_code:
     print(len(failed))
 else:
     print("market closed today")
+
 
 

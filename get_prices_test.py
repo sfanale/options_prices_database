@@ -35,7 +35,7 @@ def build_info(input_info, stock, price_date, option_type=""):
             'currency': None, 'expiration': None, 'impliedvolatility': None, 'inthemoney': None,
             'lastprice': None,
             'lasttradedate': None, 'openinterest': None, 'percentchange': None, 'strike': None,
-            'volume': None, "industry": None, "sector": None}
+            'volume': None, "industry": None, "sector": None, "pricetype":'Intraday'}
     info.update(input_info)
 
     info["priceDate"] = price_date
@@ -115,7 +115,7 @@ url = 'https://query1.finance.yahoo.com/v7/finance/options/'
 today = str(int(time.time()))
 # i added db to the sp500 just because i want the data
 
-run_code = test_if_open(url, 'AAPL')
+
 
 stock_template = "(%(ask)s, %(askSize)s, %(averageDailyVolume10Day)s, %(averageDailyVolume3Month)s, %(bid)s, " \
                  "%(bidSize)s, %(bookValue)s, %(currency)s,%(dividendDate)s, %(earningsTimestamp)s," \
@@ -154,15 +154,16 @@ stock_sql = "INSERT INTO qoutes (ask, asksize, averagedailyvolume10day, averaged
 option_template = "(%(priceDate)s, %(underlyingSymbol)s, %(ask)s, %(bid)s, %(change)s, %(contractSize)s," \
                   "%(contractSymbol)s, %(currency)s, %(expiration)s, %(impliedVolatility)s, %(inTheMoney)s, " \
                   "%(lastPrice)s,%(lastTradeDate)s, %(openInterest)s, %(percentChange)s, %(strike)s, %(volume)s," \
-                  " %(type)s, %(industry)s, %(sector)s)"
+                  " %(type)s, %(industry)s, %(sector)s, %(pricetype)"
 
 option_sql = "INSERT INTO prices (pricedate, underlyingsymbol, ask, bid, change, contractsize, contractsymbol," \
              "currency, expiration, impliedvolatility, inthemoney, lastprice, lasttradedate, openinterest," \
-             " percentchange,strike, volume, optiontype, industry, sector) VALUES %s"
+             " percentchange,strike, volume, optiontype, industry, sector, pricetype) VALUES %s"
 
 
 while datetime.datetime.now().hour < 16:
     if datetime.datetime.now().minute % 15 == 0:
+        run_code = test_if_open(url, 'AAPL')
         if run_code:
             conn = psycopg2.connect(host="options-prices.cetjnpk7rvcs.us-east-1.rds.amazonaws.com",
                                     database="options_prices",
@@ -244,6 +245,7 @@ while datetime.datetime.now().hour < 16:
             print(len(failed))
         else:
             print("market closed today")
+            time.sleep(60)
     else:
         print("sleep")
         time.sleep(60)
