@@ -35,7 +35,7 @@ def build_info(input_info, stock, price_date, option_type=""):
             'currency': None, 'expiration': None, 'impliedvolatility': None, 'inthemoney': None,
             'lastprice': None,
             'lasttradedate': None, 'openinterest': None, 'percentchange': None, 'strike': None,
-            'volume': None, "industry": None, "sector": None, "pricetype":'Intraday'}
+            'volume': None, "industry": None, "sector": None, "pricetype": 'intraday'}
     info.update(input_info)
 
     info["priceDate"] = price_date
@@ -134,7 +134,7 @@ stock_template = "(%(ask)s, %(askSize)s, %(averageDailyVolume10Day)s, %(averageD
                  " %(regularMarketVolume)s, %(sharesOutstanding)s, %(shortName)s, %(sourceInterval)s, %(symbol)s, " \
                  "%(tradeable)s, %(trailingAnnualDividendRate)s, %(trailingAnnualDividendYield)s, %(trailingPE)s, " \
                  "%(twoHundredDayAverage)s, %(twoHundredDayAverageChange)s, %(twoHundredDayAverageChangePercent)s, " \
-                 "%(pricedate)s, %(sector)s, %(industry)s)"
+                 "%(pricedate)s, %(sector)s, %(industry)s, %(pricetype)s)"
 
 stock_sql = "INSERT INTO qoutes (ask, asksize, averagedailyvolume10day, averagedailyvolume3month, bid, bidsize, " \
             "bookvalue, currency, dividenddate, earningstimestamp, earningstimestampend, earningstimestampstart, " \
@@ -149,19 +149,20 @@ stock_sql = "INSERT INTO qoutes (ask, asksize, averagedailyvolume10day, averaged
             "regularmarketpreviousclose, regularmarketprice, regularmarkettime, regularmarketvolume, " \
             "sharesoutstanding, shortname, sourceinterval, symbol, tradeable, trailingannualdividendrate, " \
             "trailingannualdividendyield, trailingpe, twohundreddayaverage, twohundreddayaveragechange," \
-            " twohundreddayaveragechangepercent, pricedate, sector, industry) VALUES %s"
+            " twohundreddayaveragechangepercent, pricedate, sector, industry, pricetype) VALUES %s"
 
 option_template = "(%(priceDate)s, %(underlyingSymbol)s, %(ask)s, %(bid)s, %(change)s, %(contractSize)s," \
                   "%(contractSymbol)s, %(currency)s, %(expiration)s, %(impliedVolatility)s, %(inTheMoney)s, " \
                   "%(lastPrice)s,%(lastTradeDate)s, %(openInterest)s, %(percentChange)s, %(strike)s, %(volume)s," \
-                  " %(type)s, %(industry)s, %(sector)s, %(pricetype)"
+                  " %(type)s, %(industry)s, %(sector)s, %(pricetype)s)"
 
 option_sql = "INSERT INTO prices (pricedate, underlyingsymbol, ask, bid, change, contractsize, contractsymbol," \
              "currency, expiration, impliedvolatility, inthemoney, lastprice, lasttradedate, openinterest," \
              " percentchange,strike, volume, optiontype, industry, sector, pricetype) VALUES %s"
 
+stop = False
 
-while datetime.datetime.now().hour < 16:
+while datetime.datetime.now().hour < 16 and stop == False:
     if datetime.datetime.now().minute % 15 == 0:
         run_code = test_if_open(url, 'AAPL')
         if run_code:
@@ -208,7 +209,7 @@ while datetime.datetime.now().hour < 16:
                             "trailingAnnualDividendRate": None,
                             "trailingAnnualDividendYield": None, "trailingPE": None, "twoHundredDayAverage": None,
                             "twoHundredDayAverageChange": None, "twoHundredDayAverageChangePercent": None, "sector": None,
-                            "industry": None}
+                            "industry": None, "pricetype": "intraday"}
                     info.update(res)
                     if stock in all_db_set:
                         info["industry"] = ''.join(str(all_db[all_db['Symbol'] == stock]['industry'].values[0]).split())
@@ -246,6 +247,9 @@ while datetime.datetime.now().hour < 16:
         else:
             print("market closed today")
             time.sleep(60)
+            if datetime.datetime.now().hour > 10:
+                stop = True
+
     else:
         print("sleep")
         time.sleep(60)
