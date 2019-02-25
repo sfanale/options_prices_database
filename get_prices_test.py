@@ -35,13 +35,14 @@ def build_info(input_info, stock, price_date, option_type=""):
             'currency': None, 'expiration': None, 'impliedvolatility': None, 'inthemoney': None,
             'lastprice': None,
             'lasttradedate': None, 'openinterest': None, 'percentchange': None, 'strike': None,
-            'volume': None, "industry": None, "sector": None, "pricetype": 'intraday'}
+            'volume': None, "industry": None, "sector": None}
     info.update(input_info)
 
     info["priceDate"] = price_date
     info["underlyingSymbol"] = stock
     info["type"] = option_type
     info["currency"] = "USD"
+    info["pricetype"] = 'intraday'
     if stock in all_db_set:
         info["industry"] = ''.join(
             str(all_db[all_db['Symbol'] == stock]['industry'].values[0]).split())
@@ -113,9 +114,6 @@ failed = []
 
 url = 'https://query1.finance.yahoo.com/v7/finance/options/'
 today = str(int(time.time()))
-# i added db to the sp500 just because i want the data
-
-
 
 stock_template = "(%(ask)s, %(askSize)s, %(averageDailyVolume10Day)s, %(averageDailyVolume3Month)s, %(bid)s, " \
                  "%(bidSize)s, %(bookValue)s, %(currency)s,%(dividendDate)s, %(earningsTimestamp)s," \
@@ -209,15 +207,16 @@ while datetime.datetime.now().hour < 16 and stop == False:
                             "trailingAnnualDividendRate": None,
                             "trailingAnnualDividendYield": None, "trailingPE": None, "twoHundredDayAverage": None,
                             "twoHundredDayAverageChange": None, "twoHundredDayAverageChangePercent": None, "sector": None,
-                            "industry": None, "pricetype": "intraday"}
+                            "industry": None}
                     info.update(res)
                     if stock in all_db_set:
                         info["industry"] = ''.join(str(all_db[all_db['Symbol'] == stock]['industry'].values[0]).split())
                         info["sector"] = ''.join(str(all_db[all_db['Symbol'] == stock]['Sector'].values[0]).split())
                     info["pricedate"] = today
+                    info["pricetype"] = 'intraday'
                     add_stock.append(info)
                     for d in dates:
-                        result = requests.get(url + stock + '?&date=' + str(d))
+                        result = requests.get(url + stock + '?&date=' + str(d),  timeout=5)
                         result = result.json()
                         for call in result["optionChain"]["result"][0]["options"][0]["calls"]:
                             call_info = build_info(call, stock, today, option_type="call")
@@ -225,6 +224,7 @@ while datetime.datetime.now().hour < 16 and stop == False:
                         for put in result["optionChain"]["result"][0]["options"][0]["puts"]:
                             put_info = build_info(put, stock, today, option_type="put")
                             add_put.append(put_info)
+                    print("done")
                 except TypeError:
                     failed.append(stock)
                     print("Didn't find dates for " + stock)
@@ -247,8 +247,6 @@ while datetime.datetime.now().hour < 16 and stop == False:
         else:
             print("market closed today")
             time.sleep(60)
-            if datetime.datetime.now().hour > 10:
-                stop = True
 
     else:
         print("sleep")
