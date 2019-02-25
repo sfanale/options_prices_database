@@ -234,6 +234,76 @@ while datetime.datetime.now().hour < 16 and stop == False:
                 except json.decoder.JSONDecodeError:
                     failed.append(stock)
                     print('json error')
+                except requests.exceptions.ReadTimeout:
+                    print('timeout')
+                except requests.exceptions.ConnectionError:
+                    print('\n\nConnection Error\n\n')
+                    failed.append(stock)
+
+            print("failed")
+            for stock in failed:
+                print(stock)
+                try:
+                    result = requests.get(url+stock+'?')
+                    result = result.json()
+                    dates = result['optionChain']['result'][0]['expirationDates']
+                    res = result['optionChain']['result'][0]['quote']
+                    info = {"ask": None, "askSize": None, "averageDailyVolume10Day": None, "averageDailyVolume3Month": None,
+                            "bid": None,
+                            "bidSize": None, "bookValue": None, "currency": None, "dividendDate": None,
+                            "earningsTimestamp": None,
+                            "earningsTimestampEnd": None, "earningsTimestampStart": None, "epsForward": None,
+                            "epsTrailingTwelveMonths": None,
+                            "esgPopulated": None, "exchange": None, "exchangeDataDelayedBy": None,
+                            "exchangeTimezoneName": None,
+                            "exchangeTimezoneShortName": None, "fiftyDayAverage": None, "fiftyDayAverageChange": None,
+                            "fiftyDayAverageChangePercent": None, "fiftyTwoWeekHigh": None, "fiftyTwoWeekHighChange": None,
+                            "fiftyTwoWeekHighChangePercent": None, "fiftyTwoWeekLow": None, "fiftyTwoWeekLowChange": None,
+                            "fiftyTwoWeekLowChangePercent": None, "fiftyTwoWeekRange": None, "financialCurrency": None,
+                            "forwardPE": None,
+                            "fullExchangeName": None, "gmtOffSetMilliseconds": None, "language": None, "longName": None,
+                            "market": None,
+                            "marketCap": None, "marketState": None, "messageBoardId": None, "postMarketChange": None,
+                            "postMarketChangePercent": None, "postMarketPrice": None, "postMarketTime": None,
+                            "priceHint": None,
+                            "priceToBook": None, "quoteSourceName": None, "quoteType": None, "region": None,
+                            "regularMarketChange": None,
+                            "regularMarketChangePercent": None, "regularMarketDayHigh": None, "regularMarketDayLow": None,
+                            "regularMarketDayRange": None, "regularMarketOpen": None, "regularMarketPreviousClose": None,
+                            "regularMarketPrice": None, "regularMarketTime": None, "regularMarketVolume": None,
+                            "sharesOutstanding": None,
+                            "shortName": None, "sourceInterval": None, "symbol": None, "tradeable": None,
+                            "trailingAnnualDividendRate": None,
+                            "trailingAnnualDividendYield": None, "trailingPE": None, "twoHundredDayAverage": None,
+                            "twoHundredDayAverageChange": None, "twoHundredDayAverageChangePercent": None, "sector": None,
+                            "industry": None}
+                    info.update(res)
+                    if stock in all_db_set:
+                        info["industry"] = ''.join(str(all_db[all_db['Symbol'] == stock]['industry'].values[0]).split())
+                        info["sector"] = ''.join(str(all_db[all_db['Symbol'] == stock]['Sector'].values[0]).split())
+                    info["pricedate"] = today
+                    info["pricetype"] = 'intraday'
+                    add_stock.append(info)
+                    for d in dates:
+                        result = requests.get(url + stock + '?&date=' + str(d),  timeout=5)
+                        result = result.json()
+                        for call in result["optionChain"]["result"][0]["options"][0]["calls"]:
+                            call_info = build_info(call, stock, today, option_type="call")
+                            add_call.append(call_info)
+                        for put in result["optionChain"]["result"][0]["options"][0]["puts"]:
+                            put_info = build_info(put, stock, today, option_type="put")
+                            add_put.append(put_info)
+                    print("done")
+                except TypeError:
+                    print("Didn't find dates for " + stock)
+                except IndexError:
+                    print('index error for '+stock)
+                except json.decoder.JSONDecodeError:
+                    print('json error')
+                except requests.exceptions.ReadTimeout:
+                    print('timeout')
+                except requests.exceptions.ConnectionError:
+                    print('\n\nConnection Error\n\n')
 
             psycopg2.extras.execute_values(cur, stock_sql, add_stock, template=stock_template)
             psycopg2.extras.execute_values(cur, option_sql, add_call, template=option_template)
