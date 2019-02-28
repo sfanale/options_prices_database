@@ -50,12 +50,21 @@ def build_info(input_info, stock, price_date, option_type=""):
     return info
 
 
+headers = {'Connection': 'close'}
+
+
 def test_if_open(url, ticker):
-    res = requests.get(url + ticker + '?')
-    res = res.json()
-    last_trade = res['optionChain']['result'][0]['quote']['regularMarketTime']
-    last_trade_date = datetime.datetime.fromtimestamp(float(last_trade)).date()
-    today = datetime.datetime.fromtimestamp(time.time()).date()
+    last_trade_date = 0
+    try:
+        res = requests.get(url + ticker + '?', timeout=5, headers=headers)
+        res = res.json()
+        last_trade = res['optionChain']['result'][0]['quote']['regularMarketTime']
+        last_trade_date = datetime.datetime.fromtimestamp(float(last_trade)).date()
+        today = datetime.datetime.fromtimestamp(time.time()).date()
+    except requests.exceptions.ReadTimeout:
+        print('timeout')
+    except requests.exceptions.ConnectionError:
+        print('\n\nConnection Error\n\n')
     return last_trade_date == today
 
 
@@ -118,12 +127,15 @@ option_sql = "INSERT INTO prices (pricedate, underlyingsymbol, ask, bid, change,
              "currency, expiration, impliedvolatility, inthemoney, lastprice, lasttradedate, openinterest," \
              " percentchange,strike, volume, optiontype, industry, sector, pricetype) VALUES %s"
 
-stop = False
 
-while datetime.datetime.now().hour < 16 and stop == False:
+
+
+
+while datetime.datetime.now().hour < 16:
     if datetime.datetime.now().minute % 15 == 0:
         run_code = test_if_open(url, 'AAPL')
         if run_code:
+            print("run code")
             conn = psycopg2.connect(host="options-prices.cetjnpk7rvcs.us-east-1.rds.amazonaws.com",
                                     database="options_prices",
                                     user="Stephen", password="password69")
@@ -133,10 +145,11 @@ while datetime.datetime.now().hour < 16 and stop == False:
             add_put = []
             failed = []
             for i, stock in enumerate(top100):
-                #print(stock)
-                #print(i/len(top100)*100)
+                print(stock)
+                print(i/len(top100)*100)
                 try:
-                    result = requests.get(url+stock+'?')
+                    result = requests.get(url+stock+'?', timeout=5, headers=headers)
+                    print(stock)
                     result = result.json()
                     dates = result['optionChain']['result'][0]['expirationDates']
                     res = result['optionChain']['result'][0]['quote']
@@ -177,7 +190,7 @@ while datetime.datetime.now().hour < 16 and stop == False:
                     info["pricetype"] = 'intraday'
                     add_stock.append(info)
                     for d in dates:
-                        result = requests.get(url + stock + '?&date=' + str(d),  timeout=5)
+                        result = requests.get(url + stock + '?&date=' + str(d),  timeout=5, headers=headers)
                         result = result.json()
                         for call in result["optionChain"]["result"][0]["options"][0]["calls"]:
                             call_info = build_info(call, stock, today, option_type="call")
@@ -201,9 +214,9 @@ while datetime.datetime.now().hour < 16 and stop == False:
                     print('\n\nConnection Error\n\n')
                     failed.append(stock)
 
-            #print("failed")
+            print("failed")
             for stock in failed:
-                #print(stock)
+                print(stock)
                 try:
                     result = requests.get(url+stock+'?')
                     result = result.json()
@@ -276,10 +289,10 @@ while datetime.datetime.now().hour < 16 and stop == False:
             #print(failed)
             #print(len(failed))
         else:
-           # print("market closed today")
+            print("market closed today")
             time.sleep(60)
 
     else:
-        #print("sleep")
+        print("sleep")
         time.sleep(60)
 
