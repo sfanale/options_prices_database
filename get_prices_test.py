@@ -2,11 +2,10 @@ import requests
 import json
 import time
 import datetime
-import psycopg2
 import psycopg2.extras
 import pandas as pd
-import threading
-from queue import Queue
+import pytz
+
 
 # define global variables
 global nyse
@@ -127,12 +126,10 @@ option_sql = "INSERT INTO prices (pricedate, underlyingsymbol, ask, bid, change,
              "currency, expiration, impliedvolatility, inthemoney, lastprice, lasttradedate, openinterest," \
              " percentchange,strike, volume, optiontype, industry, sector, pricetype) VALUES %s"
 
+tz = pytz.timezone('US/Eastern')
 
-
-
-
-while datetime.datetime.now().hour < 16:
-    if datetime.datetime.now().minute % 15 == 0:
+while datetime.datetime.now(tz).hour < 16:
+    if datetime.datetime.now(tz).minute % 15 == 0:
         run_code = test_if_open(url, 'AAPL')
         if run_code:
             print("run code")
@@ -282,7 +279,7 @@ while datetime.datetime.now().hour < 16:
             psycopg2.extras.execute_values(cur, stock_sql, add_stock, template=stock_template)
             psycopg2.extras.execute_values(cur, option_sql, add_call, template=option_template)
             psycopg2.extras.execute_values(cur, option_sql, add_put, template=option_template)
-            print("done "+str(datetime.datetime.now().hour) + ': '+str(datetime.datetime.now().minute))
+            print("done "+str(datetime.datetime.now(tz).hour) + ': '+str(datetime.datetime.now(tz).minute))
             conn.commit()
             cur.close()
             conn.close()
