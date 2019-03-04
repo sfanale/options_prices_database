@@ -54,6 +54,7 @@ headers = {'Connection': 'close'}
 
 def test_if_open(url, ticker):
     last_trade_date = 0
+    today = str(int(time.time()))
     try:
         res = requests.get(url + ticker + '?', timeout=5, headers=headers)
         res = res.json()
@@ -81,7 +82,7 @@ top100 = ['AAPL', 'GE', 'ACB', 'F', 'CRON', 'MSFT', 'FB', 'AMD', 'FIT', 'GPRO', 
 
 
 url = 'https://query1.finance.yahoo.com/v7/finance/options/'
-today = str(int(time.time()))
+
 
 stock_template = "(%(ask)s, %(askSize)s, %(averageDailyVolume10Day)s, %(averageDailyVolume3Month)s, %(bid)s, " \
                  "%(bidSize)s, %(bookValue)s, %(currency)s,%(dividendDate)s, %(earningsTimestamp)s," \
@@ -145,6 +146,7 @@ while datetime.datetime.now(tz).hour < 16:
                 print(stock)
                 print(i/len(top100)*100)
                 try:
+                    today = str(int(time.time()))
                     result = requests.get(url+stock+'?', timeout=5, headers=headers)
                     print(stock)
                     result = result.json()
